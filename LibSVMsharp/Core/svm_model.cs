@@ -19,6 +19,7 @@ namespace LibSVMsharp.Core
         public IntPtr rho; // double*
         public IntPtr probA;	// double*
         public IntPtr probB; // double*
+        public IntPtr prob_density_marks; // double* (libsvm 3.37+, for ONE_CLASS)
         public IntPtr sv_indices; // int*
         public IntPtr label; // int*	
         public IntPtr nSV; // int*

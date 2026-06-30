@@ -1,84 +1,48 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{AC04337C-E542-4BE9-8DBD-5B44535299E2}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <!-- Multi-target so the library is consumable from .NET Core 3.1 / .NET 5+
+         via the netstandard2.1 TFM, while net8.0 keeps the smart native-library
+         resolver (NativeLibrary). net6/net7 consumers bind to netstandard2.1. -->
+    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
     <RootNamespace>LibSVMsharp</RootNamespace>
     <AssemblyName>LibSVMsharp</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
+    <!-- libsvm is built as a 64-bit native library; force x64 bitness so the
+         managed and native sides always match regardless of the solution platform. -->
+    <!-- AnyCPU managed IL: runs on x64 or arm64; the native resolver picks the
+         matching runtimes/<os>-<arch>/native/ library at run time. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Description>C# wrapper for libsvm 3.23</Description>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <PlatformTarget>x64</PlatformTarget>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <PlatformTarget>x64</PlatformTarget>
-  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Core\libsvm.cs" />
-    <Compile Include="Core\svm_model.cs" />
-    <Compile Include="Core\svm_node.cs" />
-    <Compile Include="Core\svm_parameter.cs" />
-    <Compile Include="Core\svm_problem.cs" />
-    <Compile Include="Extensions\SVMModelExtensions.cs" />
-    <Compile Include="Extensions\SVMNodeExtensions.cs" />
-    <Compile Include="Extensions\SVMProblemExtensions.cs" />
-    <Compile Include="Helpers\SVMHelper.cs" />
-    <Compile Include="Helpers\SVMNodeHelper.cs" />
-    <Compile Include="Helpers\SVMProblemHelper.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SVM.cs" />
-    <Compile Include="SVMModel.cs" />
-    <Compile Include="SVMNode.cs" />
-    <Compile Include="SVMParameter.cs" />
-    <Compile Include="SVMProblem.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="LIBSVM_COPYRIGHT">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <None Include="LIBSVM_COPYRIGHT" Pack="true" PackagePath="\">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <!-- Native libsvm libraries. build-native.sh installs them under
+       runtimes/<rid>/native/ (e.g. runtimes/linux-x64/native/libsvm.so,
+       runtimes/linux-arm64/native/libsvm.so) so multiple architectures can
+       coexist and the runtime resolver picks the matching one. Flat files
+       (libsvm.dll/libsvm.so/libsvm.dylib) next to the project are also supported
+       as a fallback. -->
   <ItemGroup>
-    <Content Include="libsvm.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
+    <None Include="runtimes/**/*" Condition="Exists('runtimes')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Pack>true</Pack>
+      <PackagePath>runtimes\</PackagePath>
+    </None>
+    <None Include="libsvm.dll" Condition="Exists('libsvm.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="libsvm.so" Condition="Exists('libsvm.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="libsvm.dylib" Condition="Exists('libsvm.dylib')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
-  </PropertyGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+
 </Project>

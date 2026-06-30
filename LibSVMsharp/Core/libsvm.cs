@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 
 namespace LibSVMsharp.Core
 {
@@ -13,6 +14,81 @@ namespace LibSVMsharp.Core
     public static class libsvm
     {
         public static string VERSION = "3.23";
+
+        static libsvm()
+        {
+            // Register a custom DllImport resolver so the native libsvm library is
+            // located on every OS/architecture without a hard-coded file name. It
+            // probes next to the assembly and under runtimes/<os>-<arch>/native/
+            // (e.g. runtimes/linux-x64/native/, runtimes/linux-arm64/native/).
+            // NativeLibrary is only available on .NET 5+; under netstandard2.1 we
+            // fall back to the runtime's default resolution rules for "libsvm".
+#if NET6_0_OR_GREATER
+            NativeLibrary.SetDllImportResolver(typeof(libsvm).Assembly, ResolveLibSvm);
+#endif
+        }
+
+#if NET6_0_OR_GREATER
+        private static IntPtr ResolveLibSvm(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+        {
+            if (libraryName == "libsvm")
+            {
+                string baseDir = AppContext.BaseDirectory;
+                string fileName = NativeLibFileName();
+                string rid = CurrentRuntimeId();
+
+                var candidates = new List<string>
+                {
+                    Path.Combine(baseDir, fileName),
+                    Path.Combine(baseDir, "runtimes", rid, "native", fileName),
+                };
+
+                // libsvm's Makefile also emits a versioned SONAME (libsvm.so.3) on Linux.
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    candidates.Add(Path.Combine(baseDir, "libsvm.so.3"));
+                    candidates.Add("libsvm.so.3");
+                }
+
+                foreach (string path in candidates)
+                {
+                    if (NativeLibrary.TryLoad(path, assembly, DllImportSearchPath.AssemblyDirectory, out IntPtr handle))
+                        return handle;
+                }
+            }
+
+            // Fall back to the default resolution rules for the requested name.
+            if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out IntPtr fallback))
+                return fallback;
+
+            return IntPtr.Zero;
+        }
+
+        private static string NativeLibFileName()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return "libsvm.dll";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return "libsvm.dylib";
+            return "libsvm.so";
+        }
+
+        private static string CurrentRuntimeId()
+        {
+            string os = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win"
+                      : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "osx"
+                      : "linux";
+
+            string arch = RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => "x64",
+                Architecture.Arm64 => "arm64",
+                Architecture.Arm => "arm",
+                Architecture.X86 => "x86",
+                _ => "x64",
+            };
+
+            return os + "-" + arch;
+        }
+#endif
 
         /// <param name="prob">svm_problem</param>
         /// <param name="param">svm_parameter</param>
