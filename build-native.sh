@@ -8,7 +8,7 @@
 #   ./build-native.sh x64        # build for x86-64 (native or cross)
 #   ./build-native.sh arm64      # build for aarch64 (native or cross)
 #
-# Requirements: git, make, and a C/C++ compiler. For arm64 cross-compilation on
+# Requirements: wget or curl, tar, make, and a C/C++ compiler. For arm64 cross-compilation on
 # an x86-64 host, install the aarch64 cross toolchain, e.g. on Debian/Ubuntu:
 #   sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 set -euo pipefail
@@ -51,8 +51,23 @@ esac
 
 echo "==> Target: $RID   (host: $HOST_ARCH, cross prefix: '${CROSS:-none}')"
 
-echo "==> Cloning libsvm (v323, maps to 3.23) into $WORKDIR"
-git clone --depth 1 --branch v323 https://github.com/cjlin1/libsvm.git "$WORKDIR/libsvm"
+LIBSVM_VERSION="3.37"
+LIBSVM_TARBALL="libsvm-${LIBSVM_VERSION}.tar.gz"
+LIBSVM_URL="https://www.csie.ntu.edu.tw/~cjlin/libsvm/${LIBSVM_TARBALL}"
+echo "==> Downloading libsvm ${LIBSVM_VERSION} from ${LIBSVM_URL}"
+if command -v wget >/dev/null 2>&1; then
+    wget -q -O "$WORKDIR/${LIBSVM_TARBALL}" "${LIBSVM_URL}"
+elif command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$WORKDIR/${LIBSVM_TARBALL}" "${LIBSVM_URL}"
+else
+    echo "ERROR: need wget or curl to download libsvm source" >&2
+    exit 3
+fi
+
+echo "==> Extracting libsvm ${LIBSVM_VERSION} into $WORKDIR"
+tar -xzf "$WORKDIR/${LIBSVM_TARBALL}" -C "$WORKDIR"
+# tarball extracts to libsvm-<version>/; rename so the rest of the script is version-agnostic
+mv "$WORKDIR/libsvm-${LIBSVM_VERSION}" "$WORKDIR/libsvm"
 
 echo "==> Building libsvm shared library"
 # libsvm's Makefile honors CC/CXX and its 'lib' target produces libsvm.so.<SHVER>.
