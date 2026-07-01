@@ -25,6 +25,7 @@ namespace LibSVMsharp
             Rho = null;
             ProbabilityA = null;
             ProbabilityB = null;
+            ProbabilityDensityMarks = null;
             SVIndices = null;
             Labels = null;
             SVCounts = null;
@@ -63,6 +64,12 @@ namespace LibSVMsharp
         /// Pariwise probability information (B)
         /// </summary>
         public double[] ProbabilityB { get; set; }
+        /// <summary>
+        /// Probability density marks for ONE_CLASS (libsvm 3.37+; always length 10).
+        /// Populated when a ONE_CLASS model is trained with Probability = true, and
+        /// required for PredictProbability to work on ONE_CLASS models.
+        /// </summary>
+        public double[] ProbabilityDensityMarks { get; set; }
         /// <summary>
         /// SVIndices[0,...,SVCounts-1] are values in [1,...,num_traning_data] to indicate SVs in the training set.
         /// </summary>
@@ -104,6 +111,9 @@ namespace LibSVMsharp
 
             if (ProbabilityB != null)
                 y.ProbabilityB = ProbabilityB.Select(a => a).ToArray();
+
+            if (ProbabilityDensityMarks != null)
+                y.ProbabilityDensityMarks = ProbabilityDensityMarks.Select(a => a).ToArray();
 
             if (SVIndices != null)
                 y.SVIndices = SVIndices.Select(a => a).ToArray();
@@ -172,6 +182,16 @@ namespace LibSVMsharp
                 Marshal.Copy(x.probB, y.ProbabilityB, 0, y.ProbabilityB.Length);
             }
 
+            // libsvm 3.37+: prob_density_marks holds 10 marks used for ONE_CLASS
+            // probability density estimation (svm.cpp: nr_marks = 10). Required for
+            // svm_predict_probability / svm_check_probability_model on ONE_CLASS models.
+            y.ProbabilityDensityMarks = null;
+            if (x.prob_density_marks != IntPtr.Zero)
+            {
+                y.ProbabilityDensityMarks = new double[10];
+                Marshal.Copy(x.prob_density_marks, y.ProbabilityDensityMarks, 0, 10);
+            }
+
             if (x.nSV != IntPtr.Zero)
             {
                 y.SVCounts = new int[y.ClassCount];
@@ -238,10 +258,25 @@ namespace LibSVMsharp
             y.l = x.TotalSVCount;
             y.free_sv = (int)x.Creation;
 
-            // Allocate model.parameter
+            // Allocate model.parameter. Marshal the parameter to native to obtain a
+            // correctly laid-out struct, free that temporary allocation, then give the
+            // embedded param its OWN weight_label/weight buffers. Without this, the
+            // borrowed pointers would dangle after SVMParameter.Free and libsvm would
+            // dereference freed memory when reading model->param.
             IntPtr ptr_param = SVMParameter.Allocate(x.Parameter);
             y.param = (svm_parameter)Marshal.PtrToStructure(ptr_param, typeof(svm_parameter));
             SVMParameter.Free(ptr_param);
+
+            y.param.nr_weight = x.Parameter.WeightLabels.Length;
+            y.param.weight_label = IntPtr.Zero;
+            y.param.weight = IntPtr.Zero;
+            if (y.param.nr_weight > 0)
+            {
+                y.param.weight_label = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(int)) * x.Parameter.WeightLabels.Length);
+                Marshal.Copy(x.Parameter.WeightLabels, 0, y.param.weight_label, x.Parameter.WeightLabels.Length);
+                y.param.weight = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(double)) * x.Parameter.Weights.Length);
+                Marshal.Copy(x.Parameter.Weights, 0, y.param.weight, x.Parameter.Weights.Length);
+            }
             
             // Allocate model.rho
             y.rho = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(double)) * x.Rho.Length);
@@ -261,6 +296,14 @@ namespace LibSVMsharp
             {
                 y.probB = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(double)) * x.ProbabilityB.Length);
                 Marshal.Copy(x.ProbabilityB, 0, y.probB, x.ProbabilityB.Length);
+            }
+
+            // Allocate model.prob_density_marks (libsvm 3.37+, ONE_CLASS probability)
+            y.prob_density_marks = IntPtr.Zero;
+            if (x.ProbabilityDensityMarks != null)
+            {
+                y.prob_density_marks = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(double)) * x.ProbabilityDensityMarks.Length);
+                Marshal.Copy(x.ProbabilityDensityMarks, 0, y.prob_density_marks, x.ProbabilityDensityMarks.Length);
             }
 
             if (x.Parameter.Type != SVMType.EPSILON_SVR && x.Parameter.Type != SVMType.NU_SVR &&
@@ -339,6 +382,9 @@ namespace LibSVMsharp
 
             Marshal.FreeHGlobal(x.probB);
             x.probB = IntPtr.Zero;
+
+            Marshal.FreeHGlobal(x.prob_density_marks);
+            x.prob_density_marks = IntPtr.Zero;
 
             Marshal.FreeHGlobal(x.sv_indices);
             x.sv_indices = IntPtr.Zero;

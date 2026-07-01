@@ -58,6 +58,11 @@ namespace LibSVMsharp
     {
         public static string Version { get { return libsvm.VERSION; } }
 
+        // Keeps the print delegate alive for the process lifetime. Without a strong
+        // reference the GC may collect it, and the next native print callback would
+        // jump to reclaimed memory.
+        private static SVMPrintFunction s_printFunctionRef;
+
         /// <summary>
         /// This function constructs and returns an SVM model according to the given training data and parameters.
         /// </summary>
@@ -84,7 +89,9 @@ namespace LibSVMsharp
 
             SVMProblem.Free(ptr_problem);
             SVMParameter.Free(ptr_parameter);
-            libsvm.svm_free_model_content(ptr_model);
+            // Free both the model contents AND the svm_model struct itself.
+            // svm_free_model_content only releases the contents and leaks the struct.
+            libsvm.svm_free_and_destroy_model(ref ptr_model);
 
             return model;
         }
@@ -176,9 +183,8 @@ namespace LibSVMsharp
             {
                 SVMModel model = SVMModel.Convert(ptr_model);
 
-                // There is a little memory leackage here !!!
-                libsvm.svm_free_model_content(ptr_model);
-                ptr_model = IntPtr.Zero;
+                // Free both the model contents AND the svm_model struct itself.
+                libsvm.svm_free_and_destroy_model(ref ptr_model);
 
                 return model;
             }
@@ -227,7 +233,22 @@ namespace LibSVMsharp
             }
 
             int classCount = libsvm.svm_get_nr_class(ptr_model);
-            int size = (int)(classCount * (classCount - 1) * 0.5);
+            int svmType = libsvm.svm_get_svm_type(ptr_model);
+            // Match the official libsvm buffer sizing (svm.cpp svm_predict, svm.java,
+            // python/svmutil.py): ONE_CLASS and regression (EPSILON_SVR / NU_SVR)
+            // produce exactly ONE decision value; only classification (C_SVC / NU_SVC)
+            // produces nr_class*(nr_class-1)/2 pairwise decision values.
+            int size;
+            if (svmType == (int)SVMType.ONE_CLASS ||
+                svmType == (int)SVMType.EPSILON_SVR ||
+                svmType == (int)SVMType.NU_SVR)
+            {
+                size = 1;
+            }
+            else
+            {
+                size = (int)(classCount * (classCount - 1) * 0.5);
+            }
             IntPtr ptr_values = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(double)) * size);
 
             List<SVMNode> nodes = x.Select(a => a.Clone()).ToList();
@@ -393,11 +414,10 @@ namespace LibSVMsharp
             SVMProblem.Free(ptr_problem);
             SVMParameter.Free(ptr_parameter);
 
-            string output = Marshal.PtrToStringAnsi(ptr_output);
-            Marshal.FreeHGlobal(ptr_output);
-            ptr_output = IntPtr.Zero;
-
-            return output;
+            // svm_check_parameter returns NULL when parameters are valid, or a pointer
+            // to a const string literal on error. The caller must NOT free it (it is not
+            // caller-allocated); freeing it corrupts the heap.
+            return ptr_output == IntPtr.Zero ? null : Marshal.PtrToStringAnsi(ptr_output);
         }
         /// <summary>
         /// 
@@ -427,6 +447,7 @@ namespace LibSVMsharp
                 throw new ArgumentNullException("function");
             }
 
+            s_printFunctionRef = function; // root the delegate so it is not GC'd
             IntPtr ptr_function = Marshal.GetFunctionPointerForDelegate(function);
             libsvm.svm_set_print_string_function(ptr_function);
         }
