@@ -14,6 +14,7 @@ namespace LibSVMsharp.Core
     public static class libsvm
     {
         public static string VERSION = "3.37";
+        public static string SHVERSION = "4";
 
         static libsvm()
         {
@@ -43,11 +44,21 @@ namespace LibSVMsharp.Core
                     Path.Combine(baseDir, "runtimes", rid, "native", fileName),
                 };
 
-                // libsvm's Makefile also emits a versioned SONAME (libsvm.so.3) on Linux.
+                // libsvm's Makefile also emits a versioned SONAME (libsvm.so.N) on Linux.
+                // Probe the known SHVERSION first, then any other major version 1..9
+                // (libsvm ABI bumps are rare), newest first, both under runtimes/<rid>/native/
+                // and next to the app.
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    candidates.Add(Path.Combine(baseDir, "libsvm.so.3"));
-                    candidates.Add("libsvm.so.3");
+                    string runtimesNative = Path.Combine(baseDir, "runtimes", rid, "native");
+                    candidates.Add(Path.Combine(runtimesNative, "libsvm.so." + libsvm.SHVERSION));
+                    candidates.Add(Path.Combine(baseDir, "libsvm.so." + libsvm.SHVERSION));
+                    for (int v = 9; v >= 1; v--)
+                    {
+                        if (v.ToString() == libsvm.SHVERSION) continue;
+                        candidates.Add(Path.Combine(runtimesNative, "libsvm.so." + v));
+                        candidates.Add(Path.Combine(baseDir, "libsvm.so." + v));
+                    }
                 }
 
                 foreach (string path in candidates)

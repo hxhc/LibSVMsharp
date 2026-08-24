@@ -14,6 +14,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Description>C# wrapper for libsvm 3.23</Description>
+    <Version>3.37.0</Version>
+    <Authors>ccerhan;hxhc</Authors>
+    <RepositoryUrl>https://github.com/hxhc/LibSVMsharp</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,6 +37,9 @@
       <Pack>true</Pack>
       <PackagePath>runtimes\</PackagePath>
     </None>
+    <Compile Remove="nupkg\**" />
+    <EmbeddedResource Remove="nupkg\**" />
+    <None Remove="nupkg\**" />
     <None Include="libsvm.dll" Condition="Exists('libsvm.dll')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
