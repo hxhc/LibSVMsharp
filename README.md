@@ -13,11 +13,13 @@ For more information visit the official [libsvm](http://www.csie.ntu.edu.tw/~cjl
   `prob_density_marks` field so the managed struct matches the 3.37 memory layout.
   Without it `sv_indices` / `label` / `nSV` were misaligned by 8 bytes and one-class
   / probability models read garbage. `Core/libsvm.cs` `VERSION` bumped to `3.37`.
-- **Multi-target `netstandard2.1;net8.0`.** The library is now consumable from
-  **.NET Core 3.1 / .NET 5/6/7/8** (and Mono/Xamarin via netstandard2.1), not just
-  net8. The smart `NativeLibrary` resolver is compiled in only on the `net8.0`
-  target (`#if NET6_0_OR_GREATER`); the `netstandard2.1` target falls back to the
-  runtime's default `libsvm` resolution.
+- **Multi-target `netstandard2.0;netstandard2.1;net8.0`.** The library is now
+  consumable from **any .NET Core version** — 2.0/2.1/2.2 via `netstandard2.0`,
+  3.0/3.1 and 5/6/7 via `netstandard2.1`, 8+ via `net8.0` — as well as from
+  **.NET Framework 4.6.1+**, Mono, Unity and Xamarin. NuGet picks the highest
+  compatible target automatically. The smart `NativeLibrary` resolver is compiled
+  in only on the `net8.0` target (`#if NET6_0_OR_GREATER`); the netstandard targets
+  fall back to the runtime's default `libsvm` resolution.
 - **`build-native.sh` rewritten.**  Builds both `linux-x64`
   and `linux-arm64` (arm64 cross-compile on x64 needs `gcc-aarch64-linux-gnu`).
 - **One-class SVM validated.** Added `LibSVMSharp.Tests/TestSVMOneClass.cs` — 4
@@ -33,11 +35,52 @@ To install LibSVMsharp, download the [Nuget package](https://www.nuget.org/packa
 
 `PM> Install-Package LibSVMsharp`
 
+> **Note:** nuget.org only hosts this package up to **1.2.5**. The **3.37.0** build
+> in this repository is *not* published there, so restore it from a local feed
+> instead (see below).
+
+### Local package (3.37.0)
+
+Pack the library from this repository:
+
+```bash
+dotnet pack LibSVMsharp/LibSVMsharp.csproj -c Release -o LibSVMsharp/nupkg
+```
+
+The repository root already ships a `nuget.config` that registers
+`LibSVMsharp/nupkg` as a package source, so projects **inside this repository tree**
+restore `3.37.0` without further setup. For a project that lives elsewhere, either
+copy that `nuget.config` next to it, or register the feed machine-wide once:
+
+```bash
+dotnet nuget add source "<repo>/LibSVMsharp/nupkg" -n libsvmsharp-local
+```
+
+Then reference it normally:
+
+```xml
+<PackageReference Include="LibSVMsharp" Version="3.37.0" />
+```
+
+> `.nupkg` files are gitignored, so run the `dotnet pack` command above on each
+> machine (or after changing the sources). If a machine previously cached a
+> different `3.37.0` build, clear `~/.nuget/packages/libsvmsharp/3.37.0` — NuGet
+> treats a package version as immutable.
+
 ## Platform Support
 
-LibSVMsharp multi-targets **`netstandard2.1`** and **`net8.0`**, so it can be
-referenced from **.NET Core 3.1 / .NET 5/6/7/8** (and Mono/Xamarin via
-netstandard2.1). It runs on **Windows, Linux, and macOS** on both **x64 and arm64**.
+LibSVMsharp multi-targets **`netstandard2.0`**, **`netstandard2.1`** and
+**`net8.0`**, so it can be referenced from **any .NET Core version** as well as
+**.NET Framework 4.6.1+**, **Mono/Unity/Xamarin**. NuGet selects the highest
+compatible target:
+
+| Consumer framework                        | Resolved asset          |
+|-------------------------------------------|-------------------------|
+| .NET Core 2.0 / 2.1 / 2.2, .NET Framework 4.6.1+ | `netstandard2.0` |
+| .NET Core 3.0 / 3.1, .NET 5 / 6 / 7       | `netstandard2.1`        |
+| .NET 8 and newer                          | `net8.0`                |
+
+It runs on **Windows, Linux, and macOS** on both **x64 and arm64**.
 The managed wrapper is platform-agnostic; it only needs the native libsvm shared
 library to be present at run time.
 
@@ -52,9 +95,11 @@ that derives the current runtime identifier (e.g. `linux-arm64`, `win-x64`,
 `osx-arm64`) from the OS and the process architecture, then looks for the native
 file under `runtimes/<rid>/native/` (and next to the assembly as a fallback). No
 `LD_LIBRARY_PATH` tweaking is required, and x64/arm64 libraries can coexist side by
-side — the matching one is loaded automatically. On the **`netstandard2.1`** target
-(`NativeLibrary` is .NET 5+) the runtime's default resolution is used, so place
-`libsvm.so` / `libsvm.dll` next to the host application or on the system library path.
+side — the matching one is loaded automatically. On the **`netstandard2.0` /
+`netstandard2.1`** targets the custom resolver is not compiled in (`NativeLibrary`
+is not available there), so the runtime's default resolution applies: the native
+file is found next to the assembly, through the `runtimes/<rid>/native/` entry that
+NuGet records in `deps.json`, or on the system library path.
 
 ### Building on Linux
 

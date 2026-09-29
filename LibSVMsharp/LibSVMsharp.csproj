@@ -1,10 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Multi-target so the library is consumable from .NET Core 3.1 / .NET 5+
-         via the netstandard2.1 TFM, while net8.0 keeps the smart native-library
-         resolver (NativeLibrary). net6/net7 consumers bind to netstandard2.1. -->
-    <TargetFrameworks>netstandard2.1;net8.0</TargetFrameworks>
+    <!-- Multi-target for the widest possible reach:
+         netstandard2.0 -> .NET Core 2.0+, .NET Framework 4.6.1+, Mono, Unity;
+         netstandard2.1 -> .NET Core 3.0+ / .NET 5+;
+         net8.0         -> keeps the smart native-library resolver (NativeLibrary).
+         NuGet picks the highest compatible target, so net5/net6/net7 consumers bind
+         to netstandard2.1 and net8+ binds to net8.0. -->
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
     <RootNamespace>LibSVMsharp</RootNamespace>
     <AssemblyName>LibSVMsharp</AssemblyName>
     <!-- libsvm is built as a 64-bit native library; force x64 bitness so the
@@ -13,7 +16,7 @@
          matching runtimes/<os>-<arch>/native/ library at run time. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Description>C# wrapper for libsvm 3.23</Description>
+    <Description>C# wrapper for libsvm 3.37</Description>
     <Version>3.37.0</Version>
     <Authors>ccerhan;hxhc</Authors>
     <RepositoryUrl>https://github.com/hxhc/LibSVMsharp</RepositoryUrl>
